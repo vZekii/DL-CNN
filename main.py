@@ -8,11 +8,11 @@ from tensorflow.keras.applications import MobileNetV2
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 import matplotlib.pyplot as plt
 
-IMG_SIZE = 150
+IMG_SIZE = 160
 batch_size = 32
 
 
-data_dir = "data"
+data_dir = "split_data"
 
 # train_ds = tf.keras.utils.image_dataset_from_directory(
 #     data_dir,
@@ -34,6 +34,43 @@ data_dir = "data"
 #     labels="inferred",
 # )
 
+
+# for validation we can use this method
+# validation_generator = test_datagen.flow_from_directory(
+#'validation_dir',  # This should be your validation directory path
+# target_size=(150, 150),
+# batch_size=20,
+# class_mode="categorical"  # Use 'categorical' for multi-class classification
+# )
+# this will require us to create the actual validation data set
+
+# history = model.fit(
+#     train_ds,
+#     epochs=5,
+#     validation_data=val_ds  # Pass the validation dataset for validation during training
+# )
+
+# import matplotlib.pyplot as plt
+
+# # Plot training & validation accuracy values
+# plt.plot(history.history['accuracy'], label='Training accuracy')
+# plt.plot(history.history['val_accuracy'], label='Validation accuracy')
+# plt.title('Model accuracy')
+# plt.ylabel('Accuracy')
+# plt.xlabel('Epoch')
+# plt.legend(loc='upper left')
+# plt.show()
+
+# # Plot training & validation loss values
+# plt.plot(history.history['loss'], label='Training loss')
+# plt.plot(history.history['val_loss'], label='Validation loss')
+# plt.title('Model loss')
+# plt.ylabel('Loss')
+# plt.xlabel('Epoch')
+# plt.legend(loc='upper left')
+# plt.show()
+
+
 # All images will be rescaled by 1./255
 train_datagen = ImageDataGenerator(
     rescale=1.0 / 255,
@@ -42,24 +79,35 @@ train_datagen = ImageDataGenerator(
     # height_shift_range=0.2,
     # shear_range=0.2,
     # zoom_range=0.2,
-    horizontal_flip=True,
-    fill_mode="nearest",
+    # vertical_flip=True,
+    # fill_mode="nearest",
 )
+
 test_datagen = ImageDataGenerator(rescale=1.0 / 255)
+valid_datagen = ImageDataGenerator(rescale=1.0 / 255)
+
 
 # Flow training images in batches of 20 using train_datagen generator
 train_generator = train_datagen.flow_from_directory(
-    data_dir,  # This is the source directory for training images
-    target_size=(150, 150),  # All images will be resized to 150x150
-    batch_size=20,
-    # Since we use binary_crossentropy loss, we need binary labels
+    data_dir + "/train",  # This is the source directory for training images
+    target_size=(IMG_SIZE, IMG_SIZE),  # All images will be resized to 150x150
+    batch_size=batch_size,
     class_mode="categorical",
 )
 
-# # Flow validation images in batches of 20 using test_datagen generator
-# validation_generator = test_datagen.flow_from_directory(
-#     validation_dir, target_size=(150, 150), batch_size=20, class_mode="binary"
-# )
+test_datagen = test_datagen.flow_from_directory(
+    data_dir + "/test",  # This is the source directory for training images
+    target_size=(IMG_SIZE, IMG_SIZE),  # All images will be resized to 150x150
+    batch_size=batch_size,
+    class_mode="categorical",
+)
+
+valid_datagen = valid_datagen.flow_from_directory(
+    data_dir + "/validation",  # This is the source directory for training images
+    target_size=(IMG_SIZE, IMG_SIZE),  # All images will be resized to 150x150
+    batch_size=batch_size,
+    class_mode="categorical",
+)
 
 num_classes = 6
 
@@ -75,17 +123,18 @@ base_model = MobileNetV2(
 
 model = tf.keras.Sequential(
     [
-        base_model,
-        # tf.keras.layers.Conv2D(
-        #     32, (3, 3), activation="relu", input_shape=(150, 150, 3)
-        # ),
-        # tf.keras.layers.MaxPooling2D(2, 2),
-        # tf.keras.layers.Conv2D(64, (3, 3), activation="relu"),
-        # tf.keras.layers.MaxPooling2D(2, 2),
+        # base_model,
+        tf.keras.layers.Conv2D(
+            32, (3, 3), activation="relu", input_shape=(IMG_SIZE, IMG_SIZE, 3)
+        ),
+        tf.keras.layers.MaxPooling2D(2, 2),
+        tf.keras.layers.Conv2D(64, (3, 3), activation="relu"),
+        tf.keras.layers.MaxPooling2D(2, 2),
+        tf.keras.layers.Conv2D(128, (3, 3), activation="relu"),
+        tf.keras.layers.MaxPooling2D(2, 2),
         # tf.keras.layers.Conv2D(128, (3, 3), activation="relu"),
         # tf.keras.layers.MaxPooling2D(2, 2),
-        # tf.keras.layers.Conv2D(128, (3, 3), activation="relu"),
-        # tf.keras.layers.MaxPooling2D(2, 2),
+        tf.keras.layers.Dropout(0.2),  # Adding Dropout
         tf.keras.layers.Flatten(),
         tf.keras.layers.Dense(128, activation="relu"),
         tf.keras.layers.Dense(num_classes, activation="softmax"),
@@ -97,7 +146,14 @@ model.compile(
     metrics=["accuracy"],
 )
 
-history = model.fit(train_generator, epochs=5)
+history = model.fit(train_generator, epochs=14, validation_data=valid_datagen)
+
+# Evaluate the model on the test data
+test_loss, test_accuracy = model.evaluate(test_datagen)
+
+# Print the test loss and accuracy
+print("Test Loss:", test_loss)
+print("Test Accuracy:", test_accuracy)
 
 model.summary()
 
